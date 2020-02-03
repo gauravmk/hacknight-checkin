@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block app_content %}
-  <h3 style="margin-bottom: 40px">{{ current_event['type'] }}: {{ current_event['date'].format('M/D') }}</h3>
+  <h3 style="margin-bottom: 40px">Admin View for {{ current_event['type'] }}: {{ current_event['date'].format('M/D') }}</h3>
   <div style="margin-bottom: 40px">
     <span id="num_users">0</span> people have checked in
   </div>
