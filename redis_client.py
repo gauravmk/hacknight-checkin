@@ -26,6 +26,10 @@ def set_current_event(event_type="hacknight", event_date=None):
     redis.set(redis_key("current_event"), event_key)
 
 
+def clear_current_event():
+    redis.delete(redis_key("current_event"))
+
+
 def get_checked_in_user():
     checked_in_emails = redis.smembers(redis_key(_current_event_val()))
     return [e.decode() for e in checked_in_emails]

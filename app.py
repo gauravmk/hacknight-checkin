@@ -64,6 +64,7 @@ def finish_event():
     if not current_event:
         return render_template("no_event.html")
     google_client.save_to_google_sheets()
+    redis_client.clear_current_event()
     return "Done"
 
 
