@@ -2,7 +2,7 @@ from redis import Redis
 import arrow
 import os
 
-redis = Redis.from_url(os.getenv("REDISCLOUD_URL") or "redis://")
+redis = Redis.from_url(os.getenv("REDIS_URL") or "redis://")
 
 
 def redis_key(k):
