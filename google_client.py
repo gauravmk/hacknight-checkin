@@ -7,7 +7,7 @@ SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
 
 def save_to_google_sheets():
     current_event = redis_client.get_current_event()
-    checked_in_emails = redis_client.get_checked_in_user()
+    checked_in_users = redis_client.get_checked_in_user()
 
     # Pull down meta column from sheets
     meta_result = (
@@ -20,33 +20,33 @@ def save_to_google_sheets():
         .execute()
     )
 
-    next_empty_col_key, email_col_key = meta_result["valueRanges"][0]["values"][0]
+    next_empty_col_key, user_col_key = meta_result["valueRanges"][0]["values"][0]
 
-    # Pull down email column from sheets
-    email_col_result = (
+    # Pull down user column from sheets
+    user_col_result = (
         get_sheets_service()
         .spreadsheets()
         .values()
         .batchGet(
-            spreadsheetId="1IEym6f_2h8qqoyMwTKFyDOnFNrcWTfK_EPwmyY-Rysg",
-            ranges=[f"{email_col_key}2:{email_col_key}1000"],
+            spreadsheetId=SPREADSHEET_ID,
+            ranges=[f"{user_col_key}2:{user_col_key}1000"],
             majorDimension="COLUMNS",
         )
         .execute()
     )
 
-    email_col = email_col_result["valueRanges"][0]["values"][0]
+    user_col = user_col_result["valueRanges"][0]["values"][0]
 
-    # Add in any never before seen members to the email col list
-    for email in checked_in_emails:
-        if email not in email_col:
-            email_col.append(email)
+    # Add in any never before seen members to the user col list
+    for user in checked_in_users:
+        if user not in user_col:
+            user_col.append(user)
 
-    # checkin_col is a parallel array to email_col and stores whether
+    # checkin_col is a parallel array to user_col and stores whether
     # each user was present at the last event
     checkin_col = []
-    for email in email_col:
-        if email in checked_in_emails:
+    for user in user_col:
+        if user in checked_in_users:
             checkin_col.append("y")
         else:
             checkin_col.append("")
@@ -54,15 +54,15 @@ def save_to_google_sheets():
     # Write back to google sheets
     #
     # There are three ranges we care about
-    # 1. Update the email column (aka list of emails) to include new members
+    # 1. Update the user column (aka list of users) to include new members
     # 2. Update the checkin column for the last event with whether each person came
     # 3. Update any metadata. For now that's incrementing the event column so that
     #    the next checkin will go in the next column.
 
-    email_col_req_data = {
-        "range": f"{email_col_key}2:{email_col_key}1000",
+    user_col_req_data = {
+        "range": f"{user_col_key}2:{user_col_key}1000",
         "majorDimension": "COLUMNS",
-        "values": [email_col],
+        "values": [user_col],
     }
 
     event_title = f"{current_event['type']} {current_event['date'].format('M/D')}"
@@ -85,7 +85,7 @@ def save_to_google_sheets():
             spreadsheetId=SPREADSHEET_ID,
             body={
                 "value_input_option": "RAW",
-                "data": [meta_req_data, email_col_req_data, checkin_col_req_data],
+                "data": [meta_req_data, user_col_req_data, checkin_col_req_data],
             },
         )
         .execute()

@@ -68,6 +68,16 @@ def finish_event():
     return "Done"
 
 
+@app.route("/slack", methods=["POST"])
+def slack():
+    current_event = redis_client.get_current_event()
+    if not current_event:
+        return "There is no event to check in to"
+
+    redis_client.add_checked_in_user(request.form["user_name"])
+    return "You are checked in"
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     current_event = redis_client.get_current_event()

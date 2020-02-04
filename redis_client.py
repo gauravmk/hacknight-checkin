@@ -31,12 +31,12 @@ def clear_current_event():
 
 
 def get_checked_in_user():
-    checked_in_emails = redis.smembers(redis_key(_current_event_val()))
-    return [e.decode() for e in checked_in_emails]
+    checked_in_users = redis.smembers(redis_key(_current_event_val()))
+    return [u.decode() for u in checked_in_users]
 
 
-def add_checked_in_user(email):
-    redis.sadd(redis_key(_current_event_val()), email)
+def add_checked_in_user(user):
+    redis.sadd(redis_key(_current_event_val()), user)
 
 
 def _current_event_val():
