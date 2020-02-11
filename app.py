@@ -8,6 +8,7 @@ from flask import (
 )
 from flask_httpauth import HTTPBasicAuth
 from flask_bootstrap import Bootstrap
+from threading import Thread
 import google_client
 import redis_client
 import os
@@ -50,13 +51,17 @@ def poll_checkins():
 @app.route("/finish_event")
 @auth.login_required
 def finish_event():
-    # Get checked in users
     current_event = redis_client.get_current_event()
     if not current_event:
         return render_template("no_event.html")
+    # Do in a separate thread since saving is potentially slow
+    Thread(target=async_finish_event).start()
+    return "Saving..."
+
+
+def async_finish_event():
     google_client.save_to_google_sheets()
     redis_client.clear_current_event()
-    return "Done"
 
 
 @app.route("/slack", methods=["POST"])
