@@ -48,7 +48,7 @@ def save_to_google_sheets():
     # each user was present at the last event
     checkin_col = []
     for user in user_col:
-        if user in checked_in_users:
+        if user[0] in checked_in_users:
             checkin_col.append("y")
         else:
             checkin_col.append("")
@@ -63,7 +63,7 @@ def save_to_google_sheets():
 
     user_col_req_data = {
         "range": f"{user_col_key}2:{user_col_end_key}1000",
-        "values": [user_col],
+        "values": user_col,
     }
 
     event_title = f"{current_event['type']} {current_event['date'].format('M/D')}"
