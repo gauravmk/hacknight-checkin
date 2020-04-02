@@ -7,6 +7,7 @@ from flask_bootstrap import Bootstrap
 from threading import Thread
 import google_client
 import redis_client
+import slack_client
 import os
 
 app = Flask(__name__)
@@ -30,8 +31,10 @@ def async_finish_event():
 
 
 @app.route("/oauth")
+def oauth():
     slack_client.oauth(request.args["code"])
     return "Authed!"
+
 
 @app.route("/slack", methods=["POST"])
 def slack():

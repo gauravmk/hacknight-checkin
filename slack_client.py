@@ -9,12 +9,8 @@ def get_user_name(user_id):
 
 
 def oauth(code):
-    token = slack.WebClient().oauth_access(
+    token = slack.WebClient().oauth_v2_access(
         client_id=os.environ["SLACK_CLIENT_ID"],
         client_secret=os.environ["SLACK_CLIENT_SECRET"],
         code=code,
     )["access_token"]
-
-    resp = slack.WebClient(token=token).auth_test()
-    # store the auth token
-    print(resp)
