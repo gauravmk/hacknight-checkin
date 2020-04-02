@@ -9,35 +9,14 @@ def redis_key(k):
     return f"oo-checkin:{k}"
 
 
-def get_current_event():
-    event = _current_event_val()
-    if not event:
-        return None
-
-    event_type, event_date = event.decode().split(":")
-    return {"type": event_type, "date": arrow.get(event_date)}
-
-
-def set_current_event(event_type="hacknight", event_date=None):
-    if not event_date:
-        event_date = arrow.now("US/Pacific")
-
-    event_key = f"{event_type}:{event_date.format('YYYY-MM-DD')}"
-    redis.set(redis_key("current_event"), event_key)
-
-
-def clear_current_event():
-    redis.delete(redis_key("current_event"))
+def get_event_key():
+    return arrow.now("US/Pacific").format("MM/DD/YYYY")
 
 
 def get_checked_in_user():
-    checked_in_users = redis.smembers(redis_key(_current_event_val()))
+    checked_in_users = redis.smembers(redis_key(get_event_key()))
     return [u.decode() for u in checked_in_users]
 
 
 def add_checked_in_user(user):
-    redis.sadd(redis_key(_current_event_val()), user)
-
-
-def _current_event_val():
-    return redis.get(redis_key("current_event"))
+    redis.sadd(redis_key(get_event_key()), user)
