@@ -1,49 +1,68 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from flask import (
     Flask,
     render_template,
+    redirect,
     request,
+    session,
+    jsonify,
 )
 from flask_bootstrap import Bootstrap
-from threading import Thread
+from apscheduler.schedulers.background import BackgroundScheduler
 import google_client
 import redis_client
 import slack_client
 import os
+
 
 app = Flask(__name__)
 Bootstrap(app)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "local")
 
 
-@app.route("/finish_event")
-def finish_event():
-    current_event = redis_client.get_current_event()
-    if not current_event:
-        return render_template("no_event.html")
-    # Do in a separate thread since saving is potentially slow
-    Thread(target=async_finish_event).start()
-    return "Saving..."
-
-
-def async_finish_event():
-    google_client.save_to_google_sheets()
-    redis_client.clear_current_event()
-
-
 @app.route("/oauth")
 def oauth():
-    slack_client.oauth(request.args["code"])
-    return "Authed!"
+    team = slack_client.oauth_and_return_team(request.args["code"])
+    session["team"] = team
+    return redirect("/google-login")
 
 
-@app.route("/slack", methods=["POST"])
-def slack():
+@app.route("/google-login")
+def login():
+    return render_template("login.html")
+
+
+@app.route("/save-google-login", methods=["POST"])
+def save_login():
+    payload = request.get_json()
+    google_client.complete_login(session["team"], payload["code"])
+    sheet_url = google_client.create_initial_google_sheet(session["team"])
+    return jsonify({"sheet_url": sheet_url})
+
+
+@app.route("/slack-command", methods=["POST"])
+def slack_command():
     if request.form["token"] != os.environ.get("SLACK_VERIFICATION_TOKEN"):
         raise Exception("unauthenticated")
 
-    current_event = redis_client.get_current_event()
-    if not current_event:
-        return "There is no event to check in to"
-
-    redis_client.add_checked_in_user(request.form["user_id"])
+    redis_client.add_checked_in_user(request.form["team_id"], request.form["user_id"])
     return "You are checked in"
+
+
+def sync_attendance_to_google_sheets():
+    # Find all teams
+    teams = redis_client.get_teams_to_sync()
+    print(f"Syncing {len(teams)} teams")
+    [google_client.sync_team_to_google_sheets(t) for t in teams]
+
+
+sync_attendance_to_google_sheets()
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(
+    sync_attendance_to_google_sheets, "interval", minutes=2, id="save_job"
+)
+scheduler.start()
