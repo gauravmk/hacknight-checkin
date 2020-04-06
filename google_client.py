@@ -1,4 +1,5 @@
 from google_auth import get_sheets_service
+import string
 import os
 import redis_client
 import slack_client
@@ -7,75 +8,85 @@ SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
 
 
 def save_to_google_sheets():
-    current_event = redis_client.get_current_event()
     checked_in_users = redis_client.get_checked_in_user()
+    event_key = redis_client.get_event_key()
 
-    # Pull down meta column from sheets
-    meta_result = (
+    # Pull down header row from sheets
+    header_result = (
         get_sheets_service()
         .spreadsheets()
         .values()
-        .batchGet(
-            spreadsheetId=SPREADSHEET_ID, ranges=["B2:B3"], majorDimension="COLUMNS",
-        )
+        .batchGet(spreadsheetId=SPREADSHEET_ID, ranges=["1:1"])
         .execute()
     )
 
-    next_empty_col_key, user_col_key = meta_result["valueRanges"][0]["values"][0]
-    user_col_end_key = incr_google_col(user_col_key)
+    # We want to identify which columns the following things are in
+    # - Slack User ID
+    # - Name
+    # - Current Event
+    headers = header_result["valueRanges"][0]["values"][0]
 
-    # Pull down user column from sheets
-    user_col_result = (
+    slack_id_index = get_letter_index(headers.index("Slack User ID"))
+    name_index = get_letter_index(headers.index("Name"))
+    event_index = get_letter_index(
+        headers.index(event_key) if event_key in headers else len(headers)
+    )
+
+    # Pull down user columns from sheets
+    user_col_results = (
         get_sheets_service()
         .spreadsheets()
         .values()
         .batchGet(
             spreadsheetId=SPREADSHEET_ID,
-            ranges=[f"{user_col_key}2:{user_col_end_key}1000"],
+            ranges=[f"{slack_id_index}:{slack_id_index}", f"{name_index}:{name_index}"],
+            majorDimension="COLUMNS",
         )
         .execute()
     )
 
-    user_col = user_col_result["valueRanges"][0]["values"]
-    user_ids = [u[0] for u in user_col]
+    # These are parallel arrays. As in, the nth user in both arrays are the same user
+    user_ids = user_col_results["valueRanges"][0]["values"][0][1:]
+    user_names = user_col_results["valueRanges"][1]["values"][0][1:]
 
     # Add in any never before seen members to the user col list
     for user in checked_in_users:
         if user not in user_ids:
-            user_col.append([user, slack_client.get_user_name(user)])
+            user_ids.append(user)
+            user_names.append(slack_client.get_user_name(user))
 
-    # checkin_col is a parallel array to user_col and stores whether
+    # checkin_col is another parallel array with the first two and stores whether
     # each user was present at the last event
     checkin_col = []
-    for user in user_col:
-        if user[0] in checked_in_users:
+    for user in user_ids:
+        if user in checked_in_users:
             checkin_col.append("y")
         else:
             checkin_col.append("")
 
     # Write back to google sheets
     #
-    # There are three ranges we care about
-    # 1. Update the user column (aka list of users) to include new members
-    # 2. Update the checkin column for the last event with whether each person came
-    # 3. Update any metadata. For now that's incrementing the event column so that
-    #    the next checkin will go in the next column.
+    # We want to write back 3 ranges (each range is a column)
+    # 1. The user ids with any new users we picked up
+    # 2. The user names with any new users we picked up
+    # 3. The checkins for all users
 
-    user_col_req_data = {
-        "range": f"{user_col_key}2:{user_col_end_key}1000",
-        "values": user_col,
-    }
-
-    event_title = f"{current_event['type']} {current_event['date'].format('M/D')}"
-    checkin_col_req_data = {
-        "range": f"{next_empty_col_key}1:{next_empty_col_key}1000",
+    user_id_req_data = {
+        "range": f"{slack_id_index}2:{slack_id_index}",
         "majorDimension": "COLUMNS",
-        "values": [[event_title, *checkin_col]],
+        "values": [user_ids],
     }
 
-    meta_req_data = {
-        "range": "B2:B2",
-        "values": [[incr_google_col(next_empty_col_key)]],
+    user_name_req_data = {
+        "range": f"{name_index}2:{name_index}",
+        "majorDimension": "COLUMNS",
+        "values": [user_names],
+    }
+
+    checkin_req_data = {
+        "range": f"{event_index}:{event_index}",
+        "majorDimension": "COLUMNS",
+        "values": [[event_key, *checkin_col]],
     }
 
     (
@@ -86,19 +97,22 @@ def save_to_google_sheets():
             spreadsheetId=SPREADSHEET_ID,
             body={
                 "value_input_option": "RAW",
-                "data": [meta_req_data, user_col_req_data, checkin_col_req_data],
+                "data": [user_id_req_data, user_name_req_data, checkin_req_data],
             },
         )
         .execute()
     )
 
 
-# Bit of magic that incrememnts google sheet columns by 1.
-# A -> B, G -> H, Z -> AA, AZ -> BA, etc.
-def incr_google_col(col):
-    if col == "":
-        return "A"
-    char = col[-1]
-    if char == "Z":
-        return incr_google_col(col[:-1]) + "A"
-    return col[:-1] + (chr(ord(col[-1]) + 1))
+# Bit of magic that converts a numeric index into an alphabetical equivalent.
+# This is because google sheets numbers the columns with letters A, B... Z, AA, AB.., etc
+def get_letter_index(idx):
+    output_str = ""
+
+    # It's basically a modified base26 conversion.
+    while idx >= 26:
+        output_str = string.ascii_uppercase[idx % 26] + output_str
+        idx = int(idx / 26) - 1
+    output_str = string.ascii_uppercase[idx % 26] + output_str
+
+    return output_str
