@@ -12,6 +12,7 @@ from flask import (
 )
 from flask_bootstrap import Bootstrap
 from apscheduler.schedulers.background import BackgroundScheduler
+from threading import Thread
 import google_client
 import redis_client
 import slack_client
@@ -25,7 +26,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "local")
 
 @app.route("/oauth")
 def oauth():
-    team = slack_client.oauth_and_return_team(request.args["code"])
+    team = slack_client.finish_oauth_and_return_team(request.args["code"])
     session["team"] = team
     return redirect("/google-login")
 
@@ -39,8 +40,11 @@ def login():
 def save_login():
     payload = request.get_json()
     google_client.complete_login(session["team"], payload["code"])
-    sheet_url = google_client.create_initial_google_sheet(session["team"])
-    return jsonify({"sheet_url": sheet_url})
+    # Create the attendance google sheet in a background thread
+    Thread(
+        target=google_client.create_initial_google_sheet, args=(session["team"],),
+    ).start()
+    return jsonify({"success": True})
 
 
 @app.route("/slack-command", methods=["POST"])

@@ -6,7 +6,6 @@ import os
 import redis_client
 import slack_client
 
-# If modifying these scopes, delete the file token.pickle.
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 
@@ -25,30 +24,136 @@ def complete_login(team_id, code):
 
 def create_initial_google_sheet(team_id):
     sheets_service = _get_sheets_service(team_id)
-    spreadsheet = (
-        sheets_service.spreadsheets()
-        .create(body={"properties": {"title": "Hack Night Attendance"}})
-        .execute()
-    )
+
+    spreadsheet_body = {
+        "properties": {"title": "Hack Night Attendance"},
+        "sheets": [
+            {
+                "properties": {
+                    "title": "Attendance",
+                    "gridProperties": {"frozenRowCount": 1, "frozenColumnCount": 2},
+                },
+                "protectedRanges": [],
+            }
+        ],
+    }
+
+    spreadsheet = sheets_service.spreadsheets().create(body=spreadsheet_body).execute()
 
     # Store spreadsheet ID
-    spreadsheet_id = spreadsheet.get("spreadsheetId")
-    spreadsheet_url = spreadsheet.get("spreadsheetUrl")
-
-    (
-        sheets_service.spreadsheets()
-        .values()
-        .update(
-            spreadsheetId=spreadsheet_id,
-            range="A1:B1",
-            valueInputOption="RAW",
-            body={"values": [["Slack User ID", "Name"]]},
-        )
-        .execute()
-    )
+    spreadsheet_id = spreadsheet["spreadsheetId"]
+    spreadsheet_url = spreadsheet["spreadsheetUrl"]
+    sheet_id = spreadsheet["sheets"][0]["properties"]["sheetId"]
 
     redis_client.save(team_id, "spreadsheet_id", spreadsheet_id)
-    return spreadsheet_url
+
+    # Format the spreadsheet
+    requests = []
+
+    # Set frozen rows / columns
+    requests.append(
+        {
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": sheet_id,
+                    "title": "Attendance",
+                    "gridProperties": {"frozenRowCount": 1, "frozenColumnCount": 2},
+                },
+                "fields": "title,gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
+            }
+        }
+    )
+
+    # Bold the header
+    requests.append(
+        {
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1},
+                "cell": {
+                    "userEnteredFormat": {"textFormat": {"fontSize": 12, "bold": True}}
+                },
+                "fields": "userEnteredFormat(textFormat)",
+            }
+        }
+    )
+
+    # Setup protected ranges
+    protected_ranges = [
+        {
+            "range": {"sheetId": sheet_id, "startColumnIndex": 0, "endColumnIndex": 1},
+            "description": "Editing the slack User ID column could break the integration",
+            "warningOnly": True,
+        },
+        {
+            "range": {"sheetId": sheet_id, "startColumnIndex": 1, "endColumnIndex": 2},
+            "description": "Editing user names won't break the integration but make sure you know what you're doing",
+            "warningOnly": True,
+        },
+        {
+            "range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1},
+            "description": "Editing the headers could break the integration. As long as there is some column named 'Slack User ID' and another named 'Name', the sync will work",
+            "warningOnly": True,
+        },
+    ]
+    protected_range_requests = [
+        {"addProtectedRange": {"protectedRange": r}} for r in protected_ranges
+    ]
+    requests += protected_range_requests
+
+    # Hide the slack user id column
+    requests.append(
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 0,
+                    "endIndex": 1,
+                },
+                "properties": {"hiddenByUser": True},
+                "fields": "hiddenByUser",
+            }
+        }
+    )
+
+    # Add a formatting rule so attendance shows up as green
+    requests.append(
+        {
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [
+                        {"sheetId": sheet_id, "startRowIndex": 1, "startColumnIndex": 2}
+                    ],
+                    "booleanRule": {
+                        "condition": {"type": "NOT_BLANK"},
+                        "format": {
+                            "backgroundColor": {
+                                "red": 0.773,
+                                "green": 0.933,
+                                "blue": 0.804,
+                            }
+                        },
+                    },
+                },
+                "index": 0,
+            }
+        }
+    )
+
+    sheets_service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id, body={"requests": requests}
+    ).execute()
+
+    # Setup initial header: (Slack User Id, Name)
+    sheets_service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range="A1:B1",
+        valueInputOption="RAW",
+        body={"values": [["Slack User ID", "Name"]]},
+    ).execute()
+
+    # Alert the user that installed the app that we're all set up.
+    slack_client.send_final_onboarding_message(team_id, spreadsheet_url)
 
 
 def sync_team_to_google_sheets(team_id):
