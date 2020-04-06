@@ -25,7 +25,6 @@
       data: JSON.stringify({ code: authResult.code }),
       contentType: 'application/json',
       success: function(data) {
-        console.log(data.results);
         $("#google-sheet-url").html(`<a href="${data.sheet_url}">${data.sheet_url}</a>`);
         $("#created-google-sheet").removeClass("hidden");
       },
