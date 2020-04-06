@@ -25,20 +25,12 @@ def complete_login(team_id, code):
 def create_initial_google_sheet(team_id):
     sheets_service = _get_sheets_service(team_id)
 
-    spreadsheet_body = {
-        "properties": {"title": "Hack Night Attendance"},
-        "sheets": [
-            {
-                "properties": {
-                    "title": "Attendance",
-                    "gridProperties": {"frozenRowCount": 1, "frozenColumnCount": 2},
-                },
-                "protectedRanges": [],
-            }
-        ],
-    }
-
-    spreadsheet = sheets_service.spreadsheets().create(body=spreadsheet_body).execute()
+    # Create the spreadsheet
+    spreadsheet = (
+        sheets_service.spreadsheets()
+        .create(body={"properties": {"title": "Hack Night Attendance"}})
+        .execute()
+    )
 
     # Store spreadsheet ID
     spreadsheet_id = spreadsheet["spreadsheetId"]
@@ -95,10 +87,7 @@ def create_initial_google_sheet(team_id):
             "warningOnly": True,
         },
     ]
-    protected_range_requests = [
-        {"addProtectedRange": {"protectedRange": r}} for r in protected_ranges
-    ]
-    requests += protected_range_requests
+    requests += [{"addProtectedRange": {"protectedRange": r}} for r in protected_ranges]
 
     # Hide the slack user id column
     requests.append(
@@ -140,6 +129,7 @@ def create_initial_google_sheet(team_id):
         }
     )
 
+    # Batch run all the update requests
     sheets_service.spreadsheets().batchUpdate(
         spreadsheetId=spreadsheet_id, body={"requests": requests}
     ).execute()
