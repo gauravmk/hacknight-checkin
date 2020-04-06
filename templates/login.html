@@ -24,10 +24,6 @@
       type: "POST",
       data: JSON.stringify({ code: authResult.code }),
       contentType: 'application/json',
-      success: function(data) {
-        $("#google-sheet-url").html(`<a href="${data.sheet_url}">${data.sheet_url}</a>`);
-        $("#created-google-sheet").removeClass("hidden");
-      },
       dataType: "json",
     });
 
@@ -60,10 +56,7 @@
       </script>
     </div>
     <div id="creating-google-sheet" class="hidden section">
-      Nice! Now we're creating a new google sheet to store attendance info. Sit tight for a few seconds.
-    </div>
-    <div id="created-google-sheet" class="hidden section">
-      All set. Hack night attendance will now be tracked at <span id="google-sheet-url"></span>. Feel free to move the spreadsheet to another folder, the integration won't break. You can now close this window.
+      Sweet, that worked. We just kicked off generating the google sheet we'll use to track your hack nights attendance. Our slack bot will let you know when we're done. I'd honestly be a little bummed if you haven't gotten a message from our bot by the time you've read this sentence. In any case, you can now close this window.
     </div>
   </div>
 {% endblock %}
