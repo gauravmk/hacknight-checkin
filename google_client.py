@@ -248,10 +248,9 @@ def _get_letter_index(idx):
     output_str = ""
 
     # It's basically a modified base26 conversion.
-    while idx >= 26:
+    while idx >= 0:
         output_str = string.ascii_uppercase[idx % 26] + output_str
         idx = int(idx / 26) - 1
-    output_str = string.ascii_uppercase[idx % 26] + output_str
 
     return output_str
 
