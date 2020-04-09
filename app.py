@@ -62,9 +62,6 @@ def sync_attendance_to_google_sheets():
     print(f"Syncing {len(teams)} teams")
     [google_client.sync_team_to_google_sheets(t) for t in teams]
 
-
-sync_attendance_to_google_sheets()
-
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     sync_attendance_to_google_sheets, "interval", minutes=2, id="save_job"
