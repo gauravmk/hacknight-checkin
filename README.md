@@ -16,7 +16,7 @@ On the backend, we store everything in Google Sheets making it easy for any memb
 
 ## Contributing
 
-Currently [Gaurav Kulkarni](http://github.com/gauravmk/) is the only person working on this but if you are interested in getting involved, just let me (me being Gaurav) know. You can email me at gaurav@gauravkulkarni.com or hit me up on slack if you're on either the OpenOakland or Code for America slack.
+Currently [Gaurav](http://github.com/gauravmk/) is the only person working on this but if you are interested in getting involved, just let me (me being Gaurav) know. You can email me at gaurav@gauravkulkarni.com or hit me up on slack if you're on either the OpenOakland or Code for America slack.
 
 Having both a slack app and a google app is required to be able to dev on this repo and I'm still in "dev on the prod apps" point with this repo. So if you're interested in working on this project, just hit me up and we can work through making the dev experience usable.
 
